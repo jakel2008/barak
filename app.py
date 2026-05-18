@@ -3,6 +3,7 @@ import os
 import sqlite3
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 from flask import (
@@ -15,18 +16,22 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
 from werkzeug.utils import secure_filename
 
 
+BASE_DIR = Path(__file__).resolve().parent
 app = Flask(__name__)
-app.config["DATABASE"] = Path(__file__).resolve().parent / "barka.db"
+app.config["DATABASE"] = Path(os.getenv("BARKA_DATABASE", str(BASE_DIR / "barka.db")))
 app.config["SECRET_KEY"] = os.getenv("BARKA_SECRET_KEY", "barka-dev-secret")
 app.config["ADMIN_USERNAME"] = os.getenv("BARKA_ADMIN_USERNAME", "admin")
 app.config["ADMIN_PASSWORD"] = os.getenv("BARKA_ADMIN_PASSWORD", "admin123")
-app.config["UPLOAD_FOLDER"] = Path(__file__).resolve().parent / "static" / "uploads" / "products"
+app.config["UPLOAD_FOLDER"] = Path(
+    os.getenv("BARKA_UPLOAD_FOLDER", str(BASE_DIR / "static" / "uploads" / "products"))
+)
 app.config["ALLOWED_IMAGE_EXTENSIONS"] = {"png", "jpg", "jpeg", "webp", "gif"}
 
 
@@ -860,12 +865,68 @@ def init_db():
                 )
     db.commit()
 
+    # Create reviews table
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+            title TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            reviewer_name TEXT NOT NULL DEFAULT 'زائر',
+            helpful_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+        )
+        """
+    )
 
-def build_gallery_item(image_path: str, product, sort_order: int = 0, overrides=None):
+    # Create coupons table
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS coupons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            discount_type TEXT NOT NULL CHECK(discount_type IN ('percentage', 'fixed')),
+            discount_value REAL NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            expiry_date TEXT DEFAULT NULL,
+            usage_count INTEGER NOT NULL DEFAULT 0,
+            max_usage INTEGER DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    # Create analytics table
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analytics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            product_id INTEGER,
+            user_ip TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            data JSON DEFAULT '{}'
+        )
+        """
+    )
+
+    db.commit()
+
+
+def build_gallery_item(image_path, product, sort_order=0, overrides=None):
     overrides = overrides or {}
+    image_file = Path(app.config["UPLOAD_FOLDER"]) / image_path
     return {
         "image_path": image_path,
-        "image_url": url_for("static", filename=f"uploads/products/{image_path}"),
+        "image_url": (
+            url_for("uploaded_product_image", image_path=image_path)
+            if image_path and image_file.exists()
+            else url_for("product_placeholder_image", slug=product["slug"])
+        ),
         "kicker": overrides.get("kicker") or product.get("badge") or "منتج مميز",
         "title": overrides.get("title") or product.get("name") or "",
         "body": overrides.get("body") or product.get("summary") or product.get("description") or "",
@@ -1019,8 +1080,8 @@ def build_gallery_items_from_paths(image_paths, product_defaults, existing_items
 def get_product_image_url(product):
     image_paths = product.get("image_paths") or []
     image_path = image_paths[0] if image_paths else (product.get("image_path") or "")
-    if image_path:
-        return url_for("static", filename=f"uploads/products/{image_path}")
+    if image_path and (Path(app.config["UPLOAD_FOLDER"]) / image_path).exists():
+        return url_for("uploaded_product_image", image_path=image_path)
     return url_for("product_placeholder_image", slug=product["slug"])
 
 
@@ -1273,6 +1334,15 @@ def product_placeholder_image(slug: str):
     return Response(svg, mimetype="image/svg+xml")
 
 
+@app.route("/media/uploads/products/<path:image_path>")
+def uploaded_product_image(image_path: str):
+    upload_dir = Path(app.config["UPLOAD_FOLDER"])
+    file_path = upload_dir / image_path
+    if not file_path.exists() or not file_path.is_file():
+        abort(404)
+    return send_from_directory(upload_dir, image_path)
+
+
 def slugify(value: str):
     cleaned = []
     last_dash = False
@@ -1353,6 +1423,87 @@ def get_orders_with_items():
     return orders
 
 
+def get_client_ip():
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def log_analytics_event(event_type: str, product_id=None, data=None):
+    payload = json.dumps(data or {}, ensure_ascii=False)
+    get_db().execute(
+        """
+        INSERT INTO analytics (event_type, product_id, user_ip, data)
+        VALUES (?, ?, ?, ?)
+        """,
+        (event_type, product_id, get_client_ip(), payload),
+    )
+    get_db().commit()
+
+
+def get_dashboard_metrics():
+    db = get_db()
+    total_products = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+    total_orders = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    total_reviews = db.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]
+    active_coupons = db.execute(
+        "SELECT COUNT(*) FROM coupons WHERE is_active = 1"
+    ).fetchone()[0]
+    revenue = db.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status != 'cancelled'"
+    ).fetchone()[0]
+    analytics_rows = db.execute(
+        """
+        SELECT event_type, COUNT(*) AS event_count
+        FROM analytics
+        GROUP BY event_type
+        ORDER BY event_count DESC, event_type ASC
+        LIMIT 6
+        """
+    ).fetchall()
+    top_products = db.execute(
+        """
+        SELECT p.id, p.name, COUNT(a.id) AS view_count
+        FROM analytics a
+        JOIN products p ON p.id = a.product_id
+        WHERE a.event_type = 'product_view'
+        GROUP BY p.id, p.name
+        ORDER BY view_count DESC, p.name ASC
+        LIMIT 5
+        """
+    ).fetchall()
+    recent_reviews = db.execute(
+        """
+        SELECT reviews.id, reviews.rating, reviews.title, reviews.content, reviews.reviewer_name,
+               reviews.created_at, products.name AS product_name
+        FROM reviews
+        JOIN products ON products.id = reviews.product_id
+        ORDER BY reviews.created_at DESC, reviews.id DESC
+        LIMIT 6
+        """
+    ).fetchall()
+    coupons = db.execute(
+        """
+        SELECT id, code, name, discount_type, discount_value, is_active, expiry_date, usage_count
+        FROM coupons
+        ORDER BY is_active DESC, created_at DESC, id DESC
+        LIMIT 12
+        """
+    ).fetchall()
+    return {
+        "total_products": total_products,
+        "total_orders": total_orders,
+        "total_reviews": total_reviews,
+        "active_coupons": active_coupons,
+        "revenue": round(float(revenue or 0), 2),
+        "analytics_rows": [dict(row) for row in analytics_rows],
+        "top_products": [dict(row) for row in top_products],
+        "recent_reviews": [dict(row) for row in recent_reviews],
+        "coupons": [dict(row) for row in coupons],
+    }
+
+
 def admin_required():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
@@ -1381,6 +1532,14 @@ def ensure_database():
 @app.route("/")
 def home():
     listing_params = get_listing_params()
+    log_analytics_event(
+        "home_view",
+        data={
+            "search_term": listing_params["search_term"],
+            "department": listing_params["department"],
+            "sort": listing_params["sort_key"],
+        },
+    )
     products = get_all_products(
         department=listing_params["department"],
         subcategory=listing_params["subcategory"],
@@ -1411,6 +1570,14 @@ def department_page(department_slug: str):
         abort(404)
 
     listing_params = get_listing_params(default_department=department_slug)
+    log_analytics_event(
+        "department_view",
+        data={
+            "department": department_slug,
+            "search_term": listing_params["search_term"],
+            "sort": listing_params["sort_key"],
+        },
+    )
     products = get_all_products(
         department=department_slug,
         subcategory=listing_params["subcategory"],
@@ -1443,6 +1610,15 @@ def subcategory_page(department_slug: str, subcategory_slug: str):
         abort(404)
 
     listing_params = get_listing_params(default_department=department_slug)
+    log_analytics_event(
+        "subcategory_view",
+        data={
+            "department": department_slug,
+            "subcategory": subcategory_info["name"],
+            "search_term": listing_params["search_term"],
+            "sort": listing_params["sort_key"],
+        },
+    )
     products = get_all_products(
         department=department_slug,
         subcategory=subcategory_info["name"],
@@ -1471,6 +1647,12 @@ def product_details(slug: str):
     product = get_product_by_slug(slug)
     if product is None:
         abort(404)
+
+    log_analytics_event(
+        "product_view",
+        product_id=product["id"],
+        data={"slug": slug, "department": product["department"]},
+    )
 
     related_rows = get_db().execute(
         "SELECT * FROM products WHERE slug != ? AND department = ? ORDER BY is_featured DESC, id ASC LIMIT 4",
@@ -1504,6 +1686,11 @@ def add_to_cart(product_id: int):
     cart[cart_key] = cart.get(cart_key, 0) + quantity_value
     session["cart"] = cart
     session.modified = True
+    log_analytics_event(
+        "add_to_cart",
+        product_id=product_id,
+        data={"quantity": quantity_value, "product_name": product["name"]},
+    )
     flash(f"تمت إضافة {product['name']} إلى السلة.", "success")
     return redirect(request.referrer or url_for("cart_view"))
 
@@ -1624,6 +1811,16 @@ def checkout():
         )
 
     db.commit()
+    log_analytics_event(
+        "order_created",
+        data={
+            "order_id": order_id,
+            "item_count": len(cart["items"]),
+            "subtotal": subtotal_amount,
+            "total": total_amount,
+            "delivery_method": delivery_method,
+        },
+    )
     session["cart"] = {}
     session.modified = True
     flash(
@@ -1720,6 +1917,7 @@ def admin_dashboard():
         products=get_all_products(),
         orders=get_orders_with_items(),
         department_lookup=DEPARTMENT_LOOKUP,
+        dashboard_metrics=get_dashboard_metrics(),
     )
 
 
@@ -1968,6 +2166,81 @@ def admin_update_order_delivery(order_id: int):
     return redirect(url_for("admin_dashboard"))
 
 
+@app.post("/admin/reviews/<int:review_id>/delete")
+def admin_delete_review(review_id: int):
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    get_db().execute("DELETE FROM reviews WHERE id = ?", (review_id,))
+    get_db().commit()
+    flash("تم حذف التقييم.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.post("/admin/coupons/create")
+def admin_create_coupon():
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    form = request.form
+    code = form.get("code", "").strip().upper()
+    name = form.get("name", "").strip()
+    discount_type = form.get("discount_type", "percentage").strip()
+    expiry_date = form.get("expiry_date", "").strip() or None
+
+    try:
+        discount_value = float(form.get("discount_value", "0"))
+    except ValueError:
+        flash("قيمة الخصم غير صحيحة.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    if not code or not name or discount_type not in {"percentage", "fixed"} or discount_value <= 0:
+        flash("أدخل بيانات كوبون صحيحة.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    try:
+        get_db().execute(
+            """
+            INSERT INTO coupons (code, name, discount_type, discount_value, is_active, expiry_date)
+            VALUES (?, ?, ?, ?, 1, ?)
+            """,
+            (code, name, discount_type, discount_value, expiry_date),
+        )
+        get_db().commit()
+    except sqlite3.IntegrityError:
+        flash("رمز الكوبون مستخدم بالفعل.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    flash("تم إنشاء الكوبون.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.post("/admin/coupons/<int:coupon_id>/toggle")
+def admin_toggle_coupon(coupon_id: int):
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    coupon = get_db().execute(
+        "SELECT is_active FROM coupons WHERE id = ?",
+        (coupon_id,),
+    ).fetchone()
+    if coupon is None:
+        flash("تعذر العثور على الكوبون.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    next_state = 0 if coupon["is_active"] else 1
+    get_db().execute(
+        "UPDATE coupons SET is_active = ? WHERE id = ?",
+        (next_state, coupon_id),
+    )
+    get_db().commit()
+    flash("تم تحديث حالة الكوبون.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
 @app.route("/api/products")
 def products_api():
     listing_params = get_listing_params()
@@ -1984,5 +2257,186 @@ def products_api():
     )
 
 
+@app.route("/api/search")
+def api_search():
+    """البحث الفوري عن المنتجات"""
+    q = request.args.get("q", "").strip()
+    limit = request.args.get("limit", 8, type=int)
+    
+    if not q or len(q) < 2:
+        return jsonify({"products": []})
+
+    log_analytics_event("search", data={"query": q, "limit": limit})
+    
+    db = get_db()
+    products = db.execute(
+        """
+        SELECT id, slug, name, price, old_price, category, image_path
+        FROM products
+        WHERE LOWER(name) LIKE LOWER(?) OR LOWER(category) LIKE LOWER(?)
+        OR LOWER(summary) LIKE LOWER(?)
+        LIMIT ?
+        """,
+        (f"%{q}%", f"%{q}%", f"%{q}%", limit),
+    ).fetchall()
+    
+    result = []
+    for product in products:
+        result.append({
+            "id": product["id"],
+            "slug": product["slug"],
+            "name": product["name"],
+            "price": product["price"],
+            "old_price": product["old_price"],
+            "category": product["category"],
+            "image_url": url_for("static", filename=f"uploads/products/{product['image_path']}") if product['image_path'] else url_for("static", filename="placeholder.jpg"),
+        })
+    
+    return jsonify({"products": result})
+
+
+@app.route("/api/cart/update", methods=["POST"])
+def api_cart_update():
+    """تحديث كمية المنتج في السلة عبر AJAX"""
+    try:
+        data = request.get_json()
+        product_id = data.get("product_id")
+        quantity = int(data.get("quantity", 1))
+        
+        if not product_id or quantity < 0:
+            return jsonify({"success": False, "error": "بيانات غير صحيحة"})
+        
+        db = get_db()
+        product = db.execute(
+            "SELECT id FROM products WHERE id = ?", (product_id,)
+        ).fetchone()
+        
+        if not product:
+            return jsonify({"success": False, "error": "المنتج غير موجود"})
+        
+        # تحديث السلة في الجلسة
+        if "cart" not in session:
+            session["cart"] = {}
+        
+        if quantity == 0:
+            session["cart"].pop(str(product_id), None)
+        else:
+            session["cart"][str(product_id)] = quantity
+        
+        session.modified = True
+        log_analytics_event(
+            "cart_update",
+            product_id=product_id,
+            data={"quantity": quantity},
+        )
+        
+        return jsonify({
+            "success": True,
+            "cart_total": build_cart_details()["total"],
+            "cart_count": build_cart_details()["count"],
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/reviews", methods=["GET", "POST"])
+def api_reviews():
+    """إدارة التقييمات والآراء"""
+    if request.method == "POST":
+        try:
+            data = request.get_json()
+            product_id = data.get("product_id")
+            rating = int(data.get("rating", 5))
+            title = data.get("title") or data.get("review_title", "")
+            content = data.get("content") or data.get("review_content", "")
+            name = data.get("name") or data.get("reviewer_name", "زائر")
+            
+            title = title.strip()[:100]
+            content = content.strip()[:1000]
+            name = name.strip()[:50]
+            
+            if not (1 <= rating <= 5):
+                return jsonify({"success": False, "error": "التقييم يجب أن يكون بين 1 و 5"})
+            
+            db = get_db()
+            db.execute(
+                """
+                INSERT INTO reviews (product_id, rating, title, content, reviewer_name, helpful_count)
+                VALUES (?, ?, ?, ?, ?, 0)
+                """,
+                (product_id, rating, title, content, name)
+            )
+            db.commit()
+            log_analytics_event(
+                "review_created",
+                product_id=product_id,
+                data={"rating": rating, "reviewer_name": name},
+            )
+            
+            return jsonify({"success": True, "message": "تم حفظ التقييم بنجاح"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+    
+    else:  # GET
+        product_id = request.args.get("product_id", type=int)
+        if not product_id:
+            return jsonify({"reviews": []})
+        
+        db = get_db()
+        reviews = db.execute(
+            "SELECT * FROM reviews WHERE product_id = ? ORDER BY created_at DESC",
+            (product_id,)
+        ).fetchall()
+        
+        return jsonify({"reviews": [dict(r) for r in reviews]})
+
+
+@app.route("/api/coupon/validate", methods=["POST"])
+def api_validate_coupon():
+    """التحقق من صحة كوابين الخصم"""
+    try:
+        data = request.get_json()
+        code = data.get("code", "").strip().upper()
+        
+        db = get_db()
+        coupon = db.execute(
+            """
+            SELECT id, code, name, discount_type, discount_value, is_active, expiry_date
+            FROM coupons
+            WHERE code = ? AND is_active = 1
+            """,
+            (code,)
+        ).fetchone()
+        
+        if not coupon:
+            return jsonify({"valid": False, "message": "كوبون غير صحيح أو منتهي الصلاحية"})
+        
+        # التحقق من التاريخ
+        if coupon["expiry_date"] and coupon["expiry_date"] < datetime.now().isoformat():
+            return jsonify({"valid": False, "message": "انتهت صلاحية الكوبون"})
+
+        log_analytics_event(
+            "coupon_validated",
+            data={"code": coupon["code"], "discount_type": coupon["discount_type"]},
+        )
+        
+        return jsonify({
+            "valid": True,
+            "coupon": {
+                "id": coupon["id"],
+                "code": coupon["code"],
+                "name": coupon["name"],
+                "discount_type": coupon["discount_type"],
+                "discount_value": coupon["discount_value"],
+            }
+        })
+    except Exception as e:
+        return jsonify({"valid": False, "message": str(e)})
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5051)
+    app.run(
+        debug=os.getenv("FLASK_DEBUG", "1") == "1",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "5051")),
+    )

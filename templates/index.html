@@ -74,7 +74,10 @@
         <div class="search-grid">
             <div>
                 <label class="field-label" for="q">ابحث داخل المتجر</label>
-                <input class="text-input" id="q" name="q" value="{{ search_term }}" placeholder="مثال: هاتف، جاكيت، عطر، شقة، SUV">
+                <div data-live-search>
+                    <input class="text-input" id="q" name="q" value="{{ search_term }}" placeholder="مثال: هاتف، جاكيت، عطر، شقة، SUV" autocomplete="off">
+                    <div id="search-results"></div>
+                </div>
             </div>
             <div>
                 <label class="field-label" for="department">القسم الرئيسي</label>
@@ -103,6 +106,40 @@
             <a class="btn btn-secondary" href="{{ url_for('home') }}">عرض كل الأقسام</a>
         </div>
     </form>
+
+    <!-- Advanced Filters Panel -->
+    <div class="filters-panel">
+        <h3>مرشحات متقدمة</h3>
+        
+        <div class="filter-group">
+            <h4>النطاق السعري</h4>
+            <input type="range" id="price-range-slider" class="price-range-slider" min="0" max="100000" value="0,100000">
+            <div class="price-display" id="price-display">0 - 100000 د.أ</div>
+        </div>
+
+        <div class="filter-group">
+            <h4>التقييم</h4>
+            <div class="rating-buttons">
+                <button type="button" data-rating-filter="5">⭐⭐⭐⭐⭐ 5 نجوم</button>
+                <button type="button" data-rating-filter="4">⭐⭐⭐⭐ 4+</button>
+                <button type="button" data-rating-filter="3">⭐⭐⭐ 3+</button>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <label class="filter-checkbox">
+                <input type="checkbox" id="filter-in-stock" checked>
+                <span>المنتجات المتوفرة فقط</span>
+            </label>
+        </div>
+
+        <div class="filter-actions">
+            <button type="button" id="apply-filters" class="btn btn-primary">تطبيق المرشحات</button>
+            <button type="button" id="clear-filters" class="btn btn-secondary">مسح المرشحات</button>
+        </div>
+
+        <div class="result-count" id="result-count"></div>
+    </div>
 
     <section class="catalog-explorer">
         <div class="section-heading small catalog-explorer-heading">
@@ -194,7 +231,7 @@
 
             <div class="catalog-grid">
                 {% for product in section.products %}
-                <article class="product-card">
+                <article class="product-card" data-product="{{ product.id }}" data-price="{{ product.price }}" data-rating="{{ product.rating }}" data-stock="{{ product.stock }}">
                     <a class="product-media {% if product.image_urls|length > 1 %}has-card-slider{% endif %}" href="{{ url_for('product_details', slug=product.slug) }}" {% if product.image_urls|length > 1 %}data-card-gallery data-interval="3200"{% endif %}>
                         {% if product.image_urls|length > 1 %}
                             {% for image_url in product.image_urls %}

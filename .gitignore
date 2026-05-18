@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+render-test.db
+barak.db
+render-test-uploads/
+.env

@@ -5,7 +5,7 @@
 ## التشغيل
 
 ```powershell
-cd d:\GOLD PRO\barka
+cd d:\GOLD PRO\barak-upload
 python -m pip install -r requirements.txt
 python app.py
 ```
@@ -13,6 +13,31 @@ python app.py
 بعد التشغيل افتح:
 
 `http://127.0.0.1:5051`
+
+## النشر على Render
+
+- ملف النشر الجاهز موجود في `render.yaml`
+- ملف القيم البيئية المثال موجود في `.env.example`
+- أمر التشغيل في Render هو:
+
+```text
+gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+```
+
+- تم تجهيز التطبيق لقراءة المسارات التالية من البيئة:
+
+	- `BARKA_DATABASE`
+	- `BARKA_UPLOAD_FOLDER`
+	- `BARKA_SECRET_KEY`
+	- `BARKA_ADMIN_USERNAME`
+	- `BARKA_ADMIN_PASSWORD`
+
+- في Render استخدم قرصًا دائمًا عبر:
+
+	- `BARKA_DATABASE=/var/data/barka.db`
+	- `BARKA_UPLOAD_FOLDER=/var/data/uploads/products`
+
+- إذا كان المستودع الجذري لديك هو المجلد الأب وليس `barak-upload` نفسه، انشر هذا المجلد كخدمة فرعية أو انقل `render.yaml` إلى جذر المستودع واضبط `rootDir` accordingly.
 
 ## لوحة الإدارة
 

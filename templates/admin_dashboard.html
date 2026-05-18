@@ -18,6 +18,111 @@
         {% endfor %}
     </datalist>
 
+    <section class="admin-stats-grid">
+        <article class="metric-card">
+            <span>المنتجات</span>
+            <strong>{{ dashboard_metrics.total_products }}</strong>
+        </article>
+        <article class="metric-card">
+            <span>الطلبات</span>
+            <strong>{{ dashboard_metrics.total_orders }}</strong>
+        </article>
+        <article class="metric-card">
+            <span>التقييمات</span>
+            <strong>{{ dashboard_metrics.total_reviews }}</strong>
+        </article>
+        <article class="metric-card">
+            <span>الكوبونات النشطة</span>
+            <strong>{{ dashboard_metrics.active_coupons }}</strong>
+        </article>
+        <article class="metric-card metric-card-wide">
+            <span>إجمالي المبيعات</span>
+            <strong>{{ dashboard_metrics.revenue }} {{ store.currency }}</strong>
+        </article>
+    </section>
+
+    <div class="admin-grid admin-grid-secondary">
+        <section class="detail-block">
+            <h3>إحصاءات التفاعل</h3>
+            {% if dashboard_metrics.analytics_rows %}
+            <div class="analytics-list">
+                {% for row in dashboard_metrics.analytics_rows %}
+                <div class="analytics-row">
+                    <span>{{ row.event_type }}</span>
+                    <strong>{{ row.event_count }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p>لا توجد بيانات تفاعل بعد.</p>
+            {% endif %}
+
+            <h4>أكثر المنتجات مشاهدة</h4>
+            {% if dashboard_metrics.top_products %}
+            <div class="analytics-list compact-list">
+                {% for product in dashboard_metrics.top_products %}
+                <div class="analytics-row">
+                    <span>{{ product.name }}</span>
+                    <strong>{{ product.view_count }} مشاهدة</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p>لا توجد مشاهدات منتجات مسجلة بعد.</p>
+            {% endif %}
+        </section>
+
+        <section class="detail-block">
+            <h3>إدارة الكوبونات</h3>
+            <form action="{{ url_for('admin_create_coupon') }}" method="post" class="stack-form">
+                <div class="form-grid two-columns">
+                    <div>
+                        <label class="field-label">رمز الكوبون</label>
+                        <input class="text-input" name="code" required>
+                    </div>
+                    <div>
+                        <label class="field-label">الاسم</label>
+                        <input class="text-input" name="name" required>
+                    </div>
+                    <div>
+                        <label class="field-label">نوع الخصم</label>
+                        <select class="text-input" name="discount_type">
+                            <option value="percentage">percentage</option>
+                            <option value="fixed">fixed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="field-label">قيمة الخصم</label>
+                        <input class="text-input" type="number" step="0.01" name="discount_value" required>
+                    </div>
+                </div>
+                <label class="field-label">تاريخ الانتهاء</label>
+                <input class="text-input" type="datetime-local" name="expiry_date">
+                <button class="btn btn-primary" type="submit">إضافة كوبون</button>
+            </form>
+
+            <div class="admin-coupon-list">
+                {% for coupon in dashboard_metrics.coupons %}
+                <article class="coupon-admin-card">
+                    <div>
+                        <strong>{{ coupon.code }}</strong>
+                        <p>{{ coupon.name }}</p>
+                        <p>{{ coupon.discount_value }} {{ '%' if coupon.discount_type == 'percentage' else store.currency }}</p>
+                    </div>
+                    <div class="coupon-admin-actions">
+                        <span class="order-status">{{ 'نشط' if coupon.is_active else 'معطل' }}</span>
+                        <form action="{{ url_for('admin_toggle_coupon', coupon_id=coupon.id) }}" method="post" class="inline-form">
+                            <button class="btn btn-secondary" type="submit">{{ 'تعطيل' if coupon.is_active else 'تفعيل' }}</button>
+                        </form>
+                    </div>
+                </article>
+                {% else %}
+                <p>لا توجد كوبونات بعد.</p>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
     <div class="admin-grid">
         <section class="detail-block">
             <h3>إضافة منتج جديد</h3>
@@ -269,6 +374,28 @@
                     <button class="btn btn-danger" type="submit">حذف المنتج</button>
                 </form>
             </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="detail-block">
+        <h3>أحدث التقييمات</h3>
+        <div class="admin-review-list">
+            {% for review in dashboard_metrics.recent_reviews %}
+            <article class="review-admin-card">
+                <div>
+                    <strong>{{ review.product_name }}</strong>
+                    <p>{{ '⭐' * review.rating }} | {{ review.reviewer_name }}</p>
+                    <p>{{ review.title }}</p>
+                    <p>{{ review.content }}</p>
+                    <p class="muted-line">{{ review.created_at }}</p>
+                </div>
+                <form action="{{ url_for('admin_delete_review', review_id=review.id) }}" method="post" onsubmit="return confirm('حذف هذا التقييم؟');">
+                    <button class="btn btn-danger" type="submit">حذف التقييم</button>
+                </form>
+            </article>
+            {% else %}
+            <p>لا توجد تقييمات حتى الآن.</p>
             {% endfor %}
         </div>
     </section>

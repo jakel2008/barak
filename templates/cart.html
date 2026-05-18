@@ -21,7 +21,7 @@
                         <span class="muted-line">{{ item.product.price }} {{ store.currency }} للوحدة</span>
                     </div>
                     <div class="cart-controls">
-                        <form action="{{ url_for('update_cart') }}" method="post" class="inline-form">
+                        <form action="{{ url_for('update_cart') }}" method="post" class="inline-form" data-product-id="{{ item.product.id }}">
                             <label class="field-label" for="quantity_{{ item.product.id }}">الكمية</label>
                             <input class="text-input qty-input" id="quantity_{{ item.product.id }}" type="number" min="1" name="quantity_{{ item.product.id }}" value="{{ item.quantity }}">
                             <button class="btn btn-secondary" type="submit">تحديث</button>
@@ -44,10 +44,22 @@
 
         <aside class="purchase-card">
             <h3>إتمام الطلب</h3>
+            
+            <!-- Coupon Section -->
+            <div class="coupon-input-section">
+                <h4>هل لديك كوبون خصم؟</h4>
+                <div class="coupon-input-group">
+                    <input type="text" id="coupon-code" placeholder="أدخل رمز الكوبون" autocomplete="off">
+                    <button type="button" id="apply-coupon-btn">تطبيق</button>
+                </div>
+                <div id="applied-coupon-display"></div>
+            </div>
+
             <div class="checkout-total">
                 <span>الإجمالي</span>
-                <strong>{{ cart.total }} {{ store.currency }}</strong>
+                <strong data-cart-total>{{ cart.total }} {{ store.currency }}</strong>
             </div>
+            <div style="display:none;" data-cart-subtotal>{{ cart.total }}</div>
             <div class="contact-service-card">
                 <h4>أفضل طريقة للتواصل معك</h4>
                 <p>اختر قناة التواصل المفضلة، وسيقوم فريق الدعم والتوصيل بمتابعة الطلب حسب طريقتك المريحة.</p>
