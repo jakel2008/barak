@@ -24,13 +24,15 @@ from werkzeug.utils import secure_filename
 
 
 BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_DATABASE_PATH = BASE_DIR / "barka.db"
+DEFAULT_UPLOAD_FOLDER = BASE_DIR / "static" / "uploads" / "products"
 app = Flask(__name__)
-app.config["DATABASE"] = Path(os.getenv("BARKA_DATABASE", str(BASE_DIR / "barka.db")))
+app.config["DATABASE"] = Path(os.getenv("BARKA_DATABASE", str(DEFAULT_DATABASE_PATH)))
 app.config["SECRET_KEY"] = os.getenv("BARKA_SECRET_KEY", "barka-dev-secret")
 app.config["ADMIN_USERNAME"] = os.getenv("BARKA_ADMIN_USERNAME", "admin")
 app.config["ADMIN_PASSWORD"] = os.getenv("BARKA_ADMIN_PASSWORD", "admin123")
 app.config["UPLOAD_FOLDER"] = Path(
-    os.getenv("BARKA_UPLOAD_FOLDER", str(BASE_DIR / "static" / "uploads" / "products"))
+    os.getenv("BARKA_UPLOAD_FOLDER", str(DEFAULT_UPLOAD_FOLDER))
 )
 app.config["ALLOWED_IMAGE_EXTENSIONS"] = {"png", "jpg", "jpeg", "webp", "gif"}
 
@@ -666,9 +668,28 @@ SEED_PRODUCTS = [
         "features": ["قوة تشغيل جيدة", "مقبض مريح", "مناسب للورش", "تحكم دقيق"],
     },
 ]
+def ensure_upload_folder():
+    upload_folder = Path(app.config["UPLOAD_FOLDER"])
+    try:
+        upload_folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        upload_folder = DEFAULT_UPLOAD_FOLDER
+        upload_folder.mkdir(parents=True, exist_ok=True)
+        app.config["UPLOAD_FOLDER"] = upload_folder
+    return upload_folder
+
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(app.config["DATABASE"])
+        database_path = Path(app.config["DATABASE"])
+        try:
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+            g.db = sqlite3.connect(database_path)
+        except (OSError, sqlite3.Error):
+            fallback_database_path = DEFAULT_DATABASE_PATH
+            fallback_database_path.parent.mkdir(parents=True, exist_ok=True)
+            app.config["DATABASE"] = fallback_database_path
+            g.db = sqlite3.connect(fallback_database_path)
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -682,7 +703,7 @@ def close_db(_error):
 
 def init_db():
     db = get_db()
-    app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
+    ensure_upload_folder()
     db.execute(
         """
         CREATE TABLE IF NOT EXISTS products (
@@ -1526,6 +1547,8 @@ def inject_layout_state():
 
 @app.before_request
 def ensure_database():
+    if request.endpoint in {"static", "uploaded_product_image", "product_placeholder_image"}:
+        return None
     init_db()
 
 
