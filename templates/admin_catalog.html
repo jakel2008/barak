@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}إدارة الكتالوج | {{ store.name }}{% endblock %}
+
+{% block content %}
+<section class="admin-page shell">
+    <div class="section-heading">
+        <span>إدارة الكتالوج</span>
+        <h2>مساحة مستقلة لتنظيم الأقسام والهيكل العام</h2>
+        <p>أضف الأقسام الرئيسية والفرعية، عدل الترتيب والحالة، وابحث داخل الهيكل بسرعة بدون تشتيت لوحة الإدارة الأساسية.</p>
+    </div>
+
+    <div class="admin-toolbar">
+        <a class="btn btn-secondary" href="{{ url_for('admin_dashboard') }}">العودة إلى لوحة الإدارة</a>
+        <div class="admin-toolbar-search">
+            <label class="field-label" for="catalog-search">بحث سريع</label>
+            <input class="text-input" id="catalog-search" type="search" placeholder="ابحث باسم القسم أو القسم الفرعي">
+        </div>
+    </div>
+
+    <section class="admin-stats-grid">
+        <article class="metric-card">
+            <span>الأقسام الرئيسية</span>
+            <strong>{{ catalog_summary.total_departments }}</strong>
+        </article>
+        <article class="metric-card">
+            <span>الأقسام الفرعية</span>
+            <strong>{{ catalog_summary.total_subcategories }}</strong>
+        </article>
+        <article class="metric-card">
+            <span>المنتجات المرتبطة</span>
+            <strong>{{ dashboard_metrics.total_products }}</strong>
+        </article>
+        <article class="metric-card">
+            <span>العناصر الظاهرة</span>
+            <strong>{{ catalog_summary.active_departments }}</strong>
+        </article>
+        <article class="metric-card metric-card-wide">
+            <span>عناصر تحتاج متابعة</span>
+            <strong>{{ catalog_summary.empty_departments + catalog_summary.empty_subcategories }}</strong>
+        </article>
+    </section>
+
+    <section class="admin-grid admin-grid-secondary">
+        <article class="detail-block">
+            <h3>ملخص الكتالوج</h3>
+            <div class="analytics-list compact-list">
+                <div class="analytics-row"><span>أقسام مخفية</span><strong>{{ catalog_summary.hidden_departments }}</strong></div>
+                <div class="analytics-row"><span>أقسام فرعية مخفية</span><strong>{{ catalog_summary.hidden_subcategories }}</strong></div>
+                <div class="analytics-row"><span>أقسام بلا منتجات</span><strong>{{ catalog_summary.empty_departments }}</strong></div>
+                <div class="analytics-row"><span>أقسام بلا أقسام فرعية</span><strong>{{ catalog_summary.departments_without_subcategories }}</strong></div>
+                <div class="analytics-row"><span>أقسام فرعية بلا منتجات</span><strong>{{ catalog_summary.empty_subcategories }}</strong></div>
+            </div>
+        </article>
+        <article class="detail-block">
+            <h3>تنبيهات تشغيلية</h3>
+            <div class="catalog-alert-list">
+                {% for alert in catalog_summary.alerts %}
+                <div class="catalog-alert catalog-alert-{{ alert.level }}">{{ alert.message }}</div>
+                {% else %}
+                <div class="catalog-alert catalog-alert-success">لا توجد تنبيهات حرجة في هيكل الكتالوج حالياً.</div>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <div class="admin-grid admin-grid-secondary">
+        <section class="detail-block">
+            <h3>إضافة قسم رئيسي</h3>
+            <form action="{{ url_for('admin_create_department') }}" method="post" class="stack-form">
+                <input type="hidden" name="return_to" value="admin_catalog">
+                <div class="form-grid two-columns">
+                    <div>
+                        <label class="field-label" for="catalog-department-name">اسم القسم</label>
+                        <input class="text-input" id="catalog-department-name" name="name" required>
+                    </div>
+                    <div>
+                        <label class="field-label" for="catalog-department-slug">المعرف المختصر</label>
+                        <input class="text-input" id="catalog-department-slug" name="slug" placeholder="يولد تلقائيًا من الاسم">
+                    </div>
+                </div>
+                <label class="field-label" for="catalog-department-description">وصف القسم</label>
+                <textarea class="text-input" id="catalog-department-description" name="description" rows="3" required></textarea>
+                <button class="btn btn-primary" type="submit">إضافة قسم رئيسي</button>
+            </form>
+        </section>
+
+        <section class="detail-block">
+            <h3>إضافة قسم فرعي</h3>
+            <form action="{{ url_for('admin_create_subcategory') }}" method="post" class="stack-form">
+                <input type="hidden" name="return_to" value="admin_catalog">
+                <div class="form-grid two-columns">
+                    <div>
+                        <label class="field-label" for="catalog-subcategory-department">القسم الرئيسي</label>
+                        <select class="text-input" id="catalog-subcategory-department" name="department_slug" required>
+                            {% for department in admin_departments %}
+                            <option value="{{ department.slug }}">{{ department.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="field-label" for="catalog-subcategory-name">اسم القسم الفرعي</label>
+                        <input class="text-input" id="catalog-subcategory-name" name="name" required>
+                    </div>
+                </div>
+                <label class="field-label" for="catalog-subcategory-slug">المعرف المختصر</label>
+                <input class="text-input" id="catalog-subcategory-slug" name="slug" placeholder="يولد تلقائيًا من الاسم">
+                <button class="btn btn-primary" type="submit">إضافة قسم فرعي</button>
+            </form>
+        </section>
+    </div>
+
+    <div class="catalog-reorder-hint">
+        <span>يمكنك سحب البطاقات لإعادة ترتيب الأقسام، وسحب الصفوف داخل كل قسم لإعادة ترتيب الأقسام الفرعية.</span>
+        <div class="catalog-reorder-status" id="catalog-reorder-status" aria-live="polite"></div>
+    </div>
+
+    <section class="catalog-admin-grid" id="catalog-admin-grid">
+        {% for department in admin_departments %}
+        <details class="detail-block catalog-admin-item" data-catalog-search="{{ department.name }} {{ department.slug }} {{ department.description }} {% for subcategory in department.subcategory_items %}{{ subcategory.name }} {{ subcategory.slug }} {% endfor %}" data-department-slug="{{ department.slug }}" draggable="true" open>
+            <summary class="catalog-admin-summary">
+                <div>
+                    <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+                    <strong>{{ department.name }}</strong>
+                    <p>{{ department.description }}</p>
+                </div>
+                <div class="catalog-admin-meta">
+                    <span>{{ department.item_count }} منتج</span>
+                    <span>{{ department.subcategory_items|length }} قسم فرعي</span>
+                    <span>{% if department.is_active %}ظاهر{% else %}مخفي{% endif %}</span>
+                </div>
+            </summary>
+
+            <div class="catalog-admin-body">
+                <form action="{{ url_for('admin_update_department', department_slug=department.slug) }}" method="post" class="stack-form compact-form">
+                    <input type="hidden" name="return_to" value="admin_catalog">
+                    <div class="form-grid two-columns">
+                        <input class="text-input" name="name" value="{{ department.name }}" title="اسم القسم" placeholder="اسم القسم" required>
+                        <input class="text-input" name="slug" value="{{ department.slug }}" title="المعرف المختصر" placeholder="المعرف المختصر" required>
+                    </div>
+                    <textarea class="text-input" name="description" rows="2" title="وصف القسم" placeholder="وصف القسم" required>{{ department.description }}</textarea>
+                    <div class="form-grid three-columns">
+                        <input class="text-input" type="number" name="sort_order" value="{{ department.sort_order }}" title="ترتيب القسم" placeholder="الترتيب" required>
+                        <select class="text-input" name="is_active" title="حالة القسم">
+                            <option value="1" {% if department.is_active %}selected{% endif %}>ظاهر</option>
+                            <option value="0" {% if not department.is_active %}selected{% endif %}>مخفي</option>
+                        </select>
+                        <button class="btn btn-primary" type="submit">حفظ القسم</button>
+                    </div>
+                </form>
+
+                <div class="analytics-list compact-list subcategory-sort-list" data-department-slug="{{ department.slug }}">
+                    {% for subcategory in department.subcategory_items %}
+                    <div class="analytics-row subcategory-sort-item" data-subcategory-slug="{{ subcategory.slug }}" draggable="true">
+                        <form action="{{ url_for('admin_update_subcategory', department_slug=department.slug, subcategory_slug=subcategory.slug) }}" method="post" class="stack-form compact-form analytics-form-row">
+                            <input type="hidden" name="return_to" value="admin_catalog">
+                            <div class="form-grid two-columns">
+                                <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+                                <select class="text-input" name="department_slug" title="القسم الرئيسي" required>
+                                    {% for option in admin_departments %}
+                                    <option value="{{ option.slug }}" {% if option.slug == department.slug %}selected{% endif %}>{{ option.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <input class="text-input" name="name" value="{{ subcategory.name }}" title="اسم القسم الفرعي" placeholder="اسم القسم الفرعي" required>
+                            </div>
+                            <div class="form-grid three-columns">
+                                <input class="text-input" name="slug" value="{{ subcategory.slug }}" title="المعرف المختصر للقسم الفرعي" placeholder="المعرف المختصر" required>
+                                <input class="text-input" type="number" name="sort_order" value="{{ subcategory.sort_order }}" title="ترتيب القسم الفرعي" placeholder="الترتيب" required>
+                                <select class="text-input" name="is_active" title="حالة القسم الفرعي">
+                                    <option value="1" {% if subcategory.is_active %}selected{% endif %}>ظاهر</option>
+                                    <option value="0" {% if not subcategory.is_active %}selected{% endif %}>مخفي</option>
+                                </select>
+                            </div>
+                            <div class="coupon-admin-actions">
+                                <strong>{{ subcategory.item_count }} منتج</strong>
+                                <button class="btn btn-secondary" type="submit">حفظ الفرعي</button>
+                            </div>
+                        </form>
+                        <div class="coupon-admin-actions">
+                            <form action="{{ url_for('admin_delete_subcategory', department_slug=department.slug, subcategory_slug=subcategory.slug) }}" method="post" class="inline-form" onsubmit="return confirm('حذف هذا القسم الفرعي؟');">
+                                <input type="hidden" name="return_to" value="admin_catalog">
+                                <button class="btn btn-danger" type="submit">حذف</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p>لا توجد أقسام فرعية بعد.</p>
+                    {% endfor %}
+                </div>
+
+                <form action="{{ url_for('admin_delete_department', department_slug=department.slug) }}" method="post" class="inline-form" onsubmit="return confirm('حذف هذا القسم الرئيسي؟');">
+                    <input type="hidden" name="return_to" value="admin_catalog">
+                    <button class="btn btn-danger" type="submit">حذف القسم</button>
+                </form>
+            </div>
+        </details>
+        {% endfor %}
+    </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin-catalog.js') }}" defer></script>
+{% endblock %}

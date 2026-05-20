@@ -706,6 +706,34 @@ def init_db():
     ensure_upload_folder()
     db.execute(
         """
+        CREATE TABLE IF NOT EXISTS departments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subcategories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            department_slug TEXT NOT NULL,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(department_slug, slug),
+            FOREIGN KEY(department_slug) REFERENCES departments(slug) ON DELETE CASCADE
+        )
+        """
+    )
+    db.execute(
+        """
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             slug TEXT UNIQUE NOT NULL,
@@ -824,6 +852,29 @@ def init_db():
         db.execute("ALTER TABLE product_images ADD COLUMN cta_label TEXT NOT NULL DEFAULT ''")
     if "cta_url" not in product_image_columns:
         db.execute("ALTER TABLE product_images ADD COLUMN cta_url TEXT NOT NULL DEFAULT ''")
+
+    for index, department in enumerate(DEPARTMENTS):
+        db.execute(
+            """
+            INSERT INTO departments (slug, name, description, sort_order, is_active)
+            VALUES (?, ?, ?, ?, 1)
+            ON CONFLICT(slug) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description
+            """,
+            (department["slug"], department["name"], department["description"], index),
+        )
+        for sub_index, subcategory_name in enumerate(department["subcategories"]):
+            subcategory_slug = slugify(subcategory_name)
+            db.execute(
+                """
+                INSERT INTO subcategories (department_slug, slug, name, sort_order, is_active)
+                VALUES (?, ?, ?, ?, 1)
+                ON CONFLICT(department_slug, slug) DO UPDATE SET
+                    name = excluded.name
+                """,
+                (department["slug"], subcategory_slug, subcategory_name, sub_index),
+            )
 
     for index, product in enumerate(SEED_PRODUCTS):
         existing_product = db.execute(
@@ -1181,7 +1232,7 @@ def get_department_sections(products):
     for product in products:
         products_by_department.setdefault(product["department"], []).append(product)
 
-    for department in DEPARTMENTS:
+    for department in get_departments():
         department_products = products_by_department.get(department["slug"], [])
         if not department_products:
             continue
@@ -1224,7 +1275,7 @@ def get_department_counts():
     ).fetchall()
     counts = {row["department"]: row["item_count"] for row in rows}
     results = []
-    for department in DEPARTMENTS:
+    for department in get_departments():
         results.append({**department, "item_count": counts.get(department["slug"], 0)})
     return results
 
@@ -1261,6 +1312,146 @@ def get_subcategory_cards(department_info, products):
             }
         )
     return cards
+
+
+def get_departments(include_inactive: bool = False):
+    query = "SELECT slug, name, description FROM departments"
+    params = []
+    if not include_inactive:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY sort_order ASC, name ASC"
+    rows = get_db().execute(query, params).fetchall()
+    if not rows:
+        return [dict(department) for department in DEPARTMENTS]
+
+    subcategory_query = (
+        "SELECT department_slug, slug, name FROM subcategories"
+        + ("" if include_inactive else " WHERE is_active = 1")
+        + " ORDER BY sort_order ASC, name ASC"
+    )
+    subcategory_rows = get_db().execute(subcategory_query).fetchall()
+    subcategories_by_department = {}
+    for row in subcategory_rows:
+        subcategories_by_department.setdefault(row["department_slug"], []).append(
+            {"slug": row["slug"], "name": row["name"]}
+        )
+
+    departments = []
+    for row in rows:
+        department = dict(row)
+        department["subcategories"] = [
+            subcategory["name"]
+            for subcategory in subcategories_by_department.get(row["slug"], [])
+        ]
+        departments.append(department)
+    return departments
+
+
+def get_department_lookup(include_inactive: bool = False):
+    return {department["slug"]: department for department in get_departments(include_inactive=include_inactive)}
+
+
+def get_admin_departments():
+    department_rows = get_db().execute(
+        """
+        SELECT slug, name, description, sort_order, is_active
+        FROM departments
+        ORDER BY sort_order ASC, name ASC
+        """
+    ).fetchall()
+    departments = [dict(row) for row in department_rows] or [dict(department) for department in DEPARTMENTS]
+    counts = {
+        row["department"]: row["item_count"]
+        for row in get_db().execute(
+            "SELECT department, COUNT(*) AS item_count FROM products GROUP BY department"
+        ).fetchall()
+    }
+    subcategory_counts = {
+        (row["department"], row["subcategory"]): row["item_count"]
+        for row in get_db().execute(
+            """
+            SELECT department, subcategory, COUNT(*) AS item_count
+            FROM products
+            WHERE subcategory != ''
+            GROUP BY department, subcategory
+            """
+        ).fetchall()
+    }
+    rows = get_db().execute(
+        """
+        SELECT department_slug, slug, name, sort_order, is_active
+        FROM subcategories
+        ORDER BY sort_order ASC, name ASC
+        """
+    ).fetchall()
+    subcategories_by_department = {}
+    for row in rows:
+        subcategories_by_department.setdefault(row["department_slug"], []).append(
+            {
+                "slug": row["slug"],
+                "name": row["name"],
+                "sort_order": row["sort_order"],
+                "is_active": row["is_active"],
+                "item_count": subcategory_counts.get((row["department_slug"], row["name"]), 0),
+            }
+        )
+
+    for department in departments:
+        department.setdefault("sort_order", 0)
+        department.setdefault("is_active", 1)
+        department["item_count"] = counts.get(department["slug"], 0)
+        department["subcategory_items"] = subcategories_by_department.get(department["slug"], [])
+    return departments
+
+
+def get_catalog_admin_summary(admin_departments):
+    hidden_departments = [department for department in admin_departments if not department.get("is_active")]
+    empty_departments = [department for department in admin_departments if department.get("item_count", 0) == 0]
+    departments_without_subcategories = [
+        department for department in admin_departments if not department.get("subcategory_items")
+    ]
+    all_subcategories = [
+        subcategory
+        for department in admin_departments
+        for subcategory in department.get("subcategory_items", [])
+    ]
+    hidden_subcategories = [subcategory for subcategory in all_subcategories if not subcategory.get("is_active")]
+    empty_subcategories = [subcategory for subcategory in all_subcategories if subcategory.get("item_count", 0) == 0]
+
+    alerts = []
+    for department in empty_departments[:3]:
+        alerts.append(
+            {
+                "level": "info",
+                "message": f"القسم {department['name']} لا يحتوي على منتجات بعد.",
+            }
+        )
+    for department in departments_without_subcategories[:2]:
+        alerts.append(
+            {
+                "level": "warning",
+                "message": f"القسم {department['name']} لا يحتوي على أقسام فرعية.",
+            }
+        )
+    for subcategory in empty_subcategories[:3]:
+        alerts.append(
+            {
+                "level": "muted",
+                "message": f"القسم الفرعي {subcategory['name']} غير مرتبط بمنتجات حالياً.",
+            }
+        )
+
+    return {
+        "total_departments": len(admin_departments),
+        "total_subcategories": len(all_subcategories),
+        "active_departments": len(admin_departments) - len(hidden_departments),
+        "hidden_departments": len(hidden_departments),
+        "hidden_subcategories": len(hidden_subcategories),
+        "empty_departments": len(empty_departments),
+        "empty_subcategories": len(empty_subcategories),
+        "departments_without_subcategories": len(departments_without_subcategories),
+        "alerts": alerts,
+    }
 
 
 def normalize_phone(value: str):
@@ -1531,13 +1722,21 @@ def admin_required():
     return None
 
 
+def admin_redirect(default_endpoint: str = "admin_dashboard"):
+    endpoint = request.form.get("return_to", default_endpoint)
+    if endpoint not in {"admin_dashboard", "admin_catalog"}:
+        endpoint = default_endpoint
+    return redirect(url_for(endpoint))
+
+
 @app.context_processor
 def inject_layout_state():
+    departments = get_departments()
     return {
         "store": STORE_INFO,
         "cart_summary": build_cart_details(),
         "admin_logged_in": bool(session.get("is_admin")),
-        "departments": DEPARTMENTS,
+        "departments": departments,
         "nav_departments": get_department_counts(),
         "sort_options": SORT_OPTIONS,
         "delivery_options": DELIVERY_OPTIONS,
@@ -1555,6 +1754,7 @@ def ensure_database():
 @app.route("/")
 def home():
     listing_params = get_listing_params()
+    department_lookup = get_department_lookup()
     log_analytics_event(
         "home_view",
         data={
@@ -1580,7 +1780,7 @@ def home():
         catalog_directory=get_department_counts(),
         selected_department=listing_params["department"],
         selected_subcategory=listing_params["subcategory"],
-        selected_department_info=DEPARTMENT_LOOKUP.get(listing_params["department"]),
+        selected_department_info=department_lookup.get(listing_params["department"]),
         search_term=listing_params["search_term"],
         selected_sort=listing_params["sort_key"],
     )
@@ -1588,7 +1788,7 @@ def home():
 
 @app.route("/department/<department_slug>")
 def department_page(department_slug: str):
-    department_info = DEPARTMENT_LOOKUP.get(department_slug)
+    department_info = get_department_lookup().get(department_slug)
     if department_info is None:
         abort(404)
 
@@ -1624,7 +1824,7 @@ def department_page(department_slug: str):
 
 @app.route("/department/<department_slug>/subcategory/<subcategory_slug>")
 def subcategory_page(department_slug: str, subcategory_slug: str):
-    department_info = DEPARTMENT_LOOKUP.get(department_slug)
+    department_info = get_department_lookup().get(department_slug)
     if department_info is None:
         abort(404)
 
@@ -1671,6 +1871,8 @@ def product_details(slug: str):
     if product is None:
         abort(404)
 
+    department_lookup = get_department_lookup()
+
     log_analytics_event(
         "product_view",
         product_id=product["id"],
@@ -1687,7 +1889,7 @@ def product_details(slug: str):
         store=STORE_INFO,
         product=product,
         related_products=related_products,
-        department_info=DEPARTMENT_LOOKUP.get(product["department"]),
+        department_info=department_lookup.get(product["department"]),
         subcategory_slug=slugify(product["subcategory"] or product["category"]),
     )
 
@@ -1935,13 +2137,324 @@ def admin_dashboard():
     guard = admin_required()
     if guard is not None:
         return guard
+    admin_departments = get_admin_departments()
+    catalog_summary = get_catalog_admin_summary(admin_departments)
     return render_template(
         "admin_dashboard.html",
         products=get_all_products(),
         orders=get_orders_with_items(),
-        department_lookup=DEPARTMENT_LOOKUP,
+        department_lookup=get_department_lookup(include_inactive=True),
         dashboard_metrics=get_dashboard_metrics(),
+        admin_departments=admin_departments,
+        catalog_subcategory_total=catalog_summary["total_subcategories"],
+        catalog_summary=catalog_summary,
     )
+
+
+@app.route("/admin/catalog")
+def admin_catalog():
+    guard = admin_required()
+    if guard is not None:
+        return guard
+    admin_departments = get_admin_departments()
+    catalog_summary = get_catalog_admin_summary(admin_departments)
+    return render_template(
+        "admin_catalog.html",
+        admin_departments=admin_departments,
+        dashboard_metrics=get_dashboard_metrics(),
+        catalog_subcategory_total=catalog_summary["total_subcategories"],
+        catalog_summary=catalog_summary,
+    )
+
+
+@app.post("/admin/catalog/reorder/departments")
+def admin_reorder_departments():
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+
+    data = request.get_json(silent=True) or {}
+    order = data.get("order")
+    if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+        return jsonify({"success": False, "error": "بيانات غير صحيحة"}), 400
+
+    db = get_db()
+    existing = {
+        row["slug"]
+        for row in db.execute("SELECT slug FROM departments WHERE slug IN ({})".format(
+            ",".join("?" for _ in order)
+        ), tuple(order)).fetchall()
+    } if order else set()
+    if existing != set(order):
+        return jsonify({"success": False, "error": "تعذر مطابقة جميع الأقسام"}), 400
+
+    for index, slug in enumerate(order, start=1):
+        db.execute("UPDATE departments SET sort_order = ? WHERE slug = ?", (index, slug))
+    db.commit()
+    return jsonify({"success": True})
+
+
+@app.post("/admin/catalog/reorder/subcategories")
+def admin_reorder_subcategories():
+    if not session.get("is_admin"):
+        return jsonify({"success": False, "error": "غير مصرح"}), 401
+
+    data = request.get_json(silent=True) or {}
+    department_slug = data.get("department_slug")
+    order = data.get("order")
+    if not isinstance(department_slug, str) or not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+        return jsonify({"success": False, "error": "بيانات غير صحيحة"}), 400
+
+    db = get_db()
+    rows = db.execute(
+        "SELECT slug FROM subcategories WHERE department_slug = ?",
+        (department_slug,),
+    ).fetchall()
+    existing = {row["slug"] for row in rows}
+    if existing != set(order):
+        return jsonify({"success": False, "error": "تعذر مطابقة جميع الأقسام الفرعية"}), 400
+
+    for index, slug in enumerate(order, start=1):
+        db.execute(
+            "UPDATE subcategories SET sort_order = ? WHERE department_slug = ? AND slug = ?",
+            (index, department_slug, slug),
+        )
+    db.commit()
+    return jsonify({"success": True})
+
+
+@app.post("/admin/departments/create")
+def admin_create_department():
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    slug = slugify(request.form.get("slug", "") or name)
+
+    if not name or not description:
+        flash("أدخل اسم القسم ووصفه.", "error")
+        return admin_redirect("admin_catalog")
+
+    try:
+        get_db().execute(
+            """
+            INSERT INTO departments (slug, name, description, sort_order, is_active)
+            VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM departments), 0), 1)
+            """,
+            (slug, name, description),
+        )
+        get_db().commit()
+    except sqlite3.IntegrityError:
+        flash("المعرف المختصر للقسم مستخدم بالفعل.", "error")
+        return admin_redirect("admin_catalog")
+
+    flash("تمت إضافة القسم بنجاح.", "success")
+    return admin_redirect("admin_catalog")
+
+
+@app.post("/admin/departments/<department_slug>/delete")
+def admin_delete_department(department_slug: str):
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    product_count = get_db().execute(
+        "SELECT COUNT(*) FROM products WHERE department = ?",
+        (department_slug,),
+    ).fetchone()[0]
+    if product_count:
+        flash("لا يمكن حذف قسم مرتبط بمنتجات حالية.", "error")
+        return admin_redirect("admin_catalog")
+
+    get_db().execute("DELETE FROM subcategories WHERE department_slug = ?", (department_slug,))
+    get_db().execute("DELETE FROM departments WHERE slug = ?", (department_slug,))
+    get_db().commit()
+    flash("تم حذف القسم.", "success")
+    return admin_redirect("admin_catalog")
+
+
+@app.post("/admin/departments/<department_slug>/update")
+def admin_update_department(department_slug: str):
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    current = get_db().execute(
+        "SELECT slug, name, description, sort_order, is_active FROM departments WHERE slug = ?",
+        (department_slug,),
+    ).fetchone()
+    if current is None:
+        flash("تعذر العثور على القسم المطلوب.", "error")
+        return admin_redirect("admin_catalog")
+
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    new_slug = slugify(request.form.get("slug", "") or name)
+
+    try:
+        sort_order = int(request.form.get("sort_order", current["sort_order"]))
+    except ValueError:
+        flash("ترتيب القسم غير صالح.", "error")
+        return admin_redirect("admin_catalog")
+
+    is_active = 1 if request.form.get("is_active", "1") == "1" else 0
+
+    if not name or not description:
+        flash("أدخل اسم القسم ووصفه.", "error")
+        return admin_redirect("admin_catalog")
+
+    db = get_db()
+    try:
+        db.execute(
+            """
+            UPDATE departments
+            SET slug = ?, name = ?, description = ?, sort_order = ?, is_active = ?
+            WHERE slug = ?
+            """,
+            (new_slug, name, description, sort_order, is_active, department_slug),
+        )
+        if new_slug != department_slug:
+            db.execute(
+                "UPDATE subcategories SET department_slug = ? WHERE department_slug = ?",
+                (new_slug, department_slug),
+            )
+            db.execute(
+                "UPDATE products SET department = ? WHERE department = ?",
+                (new_slug, department_slug),
+            )
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.rollback()
+        flash("تعذر تحديث القسم. تحقق من عدم تكرار المعرف المختصر.", "error")
+        return admin_redirect("admin_catalog")
+
+    flash("تم تحديث القسم بنجاح.", "success")
+    return admin_redirect("admin_catalog")
+
+
+@app.post("/admin/subcategories/create")
+def admin_create_subcategory():
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    department_slug = request.form.get("department_slug", "").strip()
+    name = request.form.get("name", "").strip()
+    slug = slugify(request.form.get("slug", "") or name)
+
+    if department_slug not in get_department_lookup(include_inactive=True) or not name:
+        flash("أدخل قسماً رئيسياً صالحاً واسم القسم الفرعي.", "error")
+        return admin_redirect("admin_catalog")
+
+    try:
+        get_db().execute(
+            """
+            INSERT INTO subcategories (department_slug, slug, name, sort_order, is_active)
+            VALUES (?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM subcategories WHERE department_slug = ?), 0), 1)
+            """,
+            (department_slug, slug, name, department_slug),
+        )
+        get_db().commit()
+    except sqlite3.IntegrityError:
+        flash("هذا القسم الفرعي موجود بالفعل داخل القسم الرئيسي.", "error")
+        return admin_redirect("admin_catalog")
+
+    flash("تمت إضافة القسم الفرعي.", "success")
+    return admin_redirect("admin_catalog")
+
+
+@app.post("/admin/subcategories/<department_slug>/<subcategory_slug>/delete")
+def admin_delete_subcategory(department_slug: str, subcategory_slug: str):
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    row = get_db().execute(
+        "SELECT name FROM subcategories WHERE department_slug = ? AND slug = ?",
+        (department_slug, subcategory_slug),
+    ).fetchone()
+    if row is None:
+        flash("تعذر العثور على القسم الفرعي.", "error")
+        return admin_redirect("admin_catalog")
+
+    product_count = get_db().execute(
+        "SELECT COUNT(*) FROM products WHERE department = ? AND subcategory = ?",
+        (department_slug, row["name"]),
+    ).fetchone()[0]
+    if product_count:
+        flash("لا يمكن حذف قسم فرعي مرتبط بمنتجات حالية.", "error")
+        return admin_redirect("admin_catalog")
+
+    get_db().execute(
+        "DELETE FROM subcategories WHERE department_slug = ? AND slug = ?",
+        (department_slug, subcategory_slug),
+    )
+    get_db().commit()
+    flash("تم حذف القسم الفرعي.", "success")
+    return admin_redirect("admin_catalog")
+
+
+@app.post("/admin/subcategories/<department_slug>/<subcategory_slug>/update")
+def admin_update_subcategory(department_slug: str, subcategory_slug: str):
+    guard = admin_required()
+    if guard is not None:
+        return guard
+
+    current = get_db().execute(
+        """
+        SELECT department_slug, slug, name, sort_order, is_active
+        FROM subcategories
+        WHERE department_slug = ? AND slug = ?
+        """,
+        (department_slug, subcategory_slug),
+    ).fetchone()
+    if current is None:
+        flash("تعذر العثور على القسم الفرعي.", "error")
+        return admin_redirect("admin_catalog")
+
+    new_department_slug = request.form.get("department_slug", "").strip()
+    name = request.form.get("name", "").strip()
+    new_slug = slugify(request.form.get("slug", "") or name)
+
+    try:
+        sort_order = int(request.form.get("sort_order", current["sort_order"]))
+    except ValueError:
+        flash("ترتيب القسم الفرعي غير صالح.", "error")
+        return admin_redirect("admin_catalog")
+
+    is_active = 1 if request.form.get("is_active", "1") == "1" else 0
+
+    if new_department_slug not in get_department_lookup(include_inactive=True) or not name:
+        flash("أدخل قسماً رئيسياً صالحاً واسم القسم الفرعي.", "error")
+        return admin_redirect("admin_catalog")
+
+    db = get_db()
+    try:
+        db.execute(
+            """
+            UPDATE subcategories
+            SET department_slug = ?, slug = ?, name = ?, sort_order = ?, is_active = ?
+            WHERE department_slug = ? AND slug = ?
+            """,
+            (new_department_slug, new_slug, name, sort_order, is_active, department_slug, subcategory_slug),
+        )
+        db.execute(
+            """
+            UPDATE products
+            SET department = ?, subcategory = ?
+            WHERE department = ? AND subcategory = ?
+            """,
+            (new_department_slug, name, department_slug, current["name"]),
+        )
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.rollback()
+        flash("تعذر تحديث القسم الفرعي. تحقق من عدم تكرار المعرف المختصر داخل القسم الرئيسي.", "error")
+        return admin_redirect("admin_catalog")
+
+    flash("تم تحديث القسم الفرعي.", "success")
+    return admin_redirect("admin_catalog")
 
 
 @app.post("/admin/products/create")
@@ -1970,7 +2483,7 @@ def admin_create_product():
         flash("تنسيق السعر أو التقييم غير صحيح.", "error")
         return redirect(url_for("admin_dashboard"))
 
-    if department not in DEPARTMENT_LOOKUP or not all([name, category, subcategory, summary, description]) or not features:
+    if department not in get_department_lookup(include_inactive=True) or not all([name, category, subcategory, summary, description]) or not features:
         flash("أدخل جميع بيانات المنتج المطلوبة مع سطر منفصل لكل ميزة.", "error")
         return redirect(url_for("admin_dashboard"))
 
@@ -2043,7 +2556,7 @@ def admin_update_product(product_id: int):
     features = [item.strip() for item in form.get("features", "").splitlines() if item.strip()]
     image_files = request.files.getlist("images")
     remove_images = set(form.getlist("remove_images"))
-    if department not in DEPARTMENT_LOOKUP or not subcategory or not features:
+    if department not in get_department_lookup(include_inactive=True) or not subcategory or not features:
         flash("يجب إدخال ميزة واحدة على الأقل.", "error")
         return redirect(url_for("admin_dashboard"))
 

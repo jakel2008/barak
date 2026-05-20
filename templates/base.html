@@ -40,6 +40,7 @@
                 <a href="{{ url_for('home') }}#contact">التواصل</a>
                 {% if admin_logged_in %}
                 <a href="{{ url_for('admin_dashboard') }}">الإدارة</a>
+                <a href="{{ url_for('admin_catalog') }}">الكتالوج</a>
                 <a href="{{ url_for('admin_logout') }}">خروج الإدارة</a>
                 {% else %}
                 <a href="{{ url_for('admin_login') }}">دخول الإدارة</a>

@@ -1152,6 +1152,10 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.three-columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .card-link {
     display: inline-flex;
     margin-top: 10px;
@@ -1366,6 +1370,123 @@ textarea.text-input {
     margin-bottom: 20px;
 }
 
+.admin-toolbar {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.admin-toolbar-search {
+    width: min(380px, 100%);
+}
+
+.admin-action-panel {
+    margin-bottom: 20px;
+}
+
+.admin-action-grid,
+.catalog-admin-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.catalog-admin-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.catalog-admin-summary::-webkit-details-marker {
+    display: none;
+}
+
+.catalog-admin-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.catalog-admin-body {
+    margin-top: 18px;
+    display: grid;
+    gap: 16px;
+}
+
+.catalog-reorder-hint {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 16px;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.catalog-reorder-status {
+    min-height: 24px;
+    color: var(--accent);
+}
+
+.catalog-reorder-status[data-state="error"] {
+    color: #7a2020;
+}
+
+.catalog-alert-list {
+    display: grid;
+    gap: 10px;
+}
+
+.catalog-alert {
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.catalog-alert-warning {
+    background: rgba(201, 109, 66, 0.12);
+}
+
+.catalog-alert-info {
+    background: rgba(32, 68, 60, 0.1);
+}
+
+.catalog-alert-muted {
+    background: rgba(27, 26, 24, 0.05);
+}
+
+.catalog-alert-success {
+    background: rgba(82, 152, 114, 0.15);
+}
+
+.drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    color: var(--muted);
+    font-weight: 800;
+    cursor: grab;
+}
+
+.catalog-admin-item.dragging,
+.subcategory-sort-item.dragging {
+    opacity: 0.55;
+}
+
+.subcategory-sort-item {
+    align-items: flex-start;
+}
+
+.section-heading-inline {
+    margin-bottom: 18px;
+}
+
 .analytics-list,
 .admin-coupon-list,
 .admin-review-list {
@@ -1405,6 +1526,21 @@ textarea.text-input {
 .review-admin-card p,
 .coupon-admin-card p {
     margin: 4px 0;
+}
+
+.compact-form {
+    margin-top: 14px;
+}
+
+.analytics-form-row {
+    flex: 1;
+}
+
+.analytics-form-row .coupon-admin-actions {
+    grid-template-columns: auto auto;
+    align-items: center;
+    justify-content: space-between;
+    justify-items: stretch;
 }
 
 .order-top {
@@ -1622,6 +1758,17 @@ textarea.text-input {
     .card-actions .inline-form,
     .card-actions .inline-form button {
         width: 100%;
+    }
+
+    .admin-toolbar,
+    .catalog-admin-summary {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .three-columns,
+    .analytics-form-row .coupon-admin-actions {
+        grid-template-columns: 1fr;
     }
 
     .subcategory-explorer-grid {
