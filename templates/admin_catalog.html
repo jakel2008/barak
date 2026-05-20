@@ -10,6 +10,13 @@
         <p>أضف الأقسام الرئيسية والفرعية، عدل الترتيب والحالة، وابحث داخل الهيكل بسرعة بدون تشتيت لوحة الإدارة الأساسية.</p>
     </div>
 
+    <div class="admin-mobile-shortcuts">
+        <a class="admin-shortcut-link" href="#catalog-summary">الملخص</a>
+        <a class="admin-shortcut-link" href="#catalog-add-department">قسم رئيسي</a>
+        <a class="admin-shortcut-link" href="#catalog-add-subcategory">قسم فرعي</a>
+        <a class="admin-shortcut-link" href="#catalog-structure">الهيكل</a>
+    </div>
+
     <div class="admin-toolbar">
         <a class="btn btn-secondary" href="{{ url_for('admin_dashboard') }}">العودة إلى لوحة الإدارة</a>
         <div class="admin-toolbar-search">
@@ -18,7 +25,7 @@
         </div>
     </div>
 
-    <section class="admin-stats-grid">
+    <section class="admin-stats-grid admin-section-anchor" id="catalog-summary">
         <article class="metric-card">
             <span>الأقسام الرئيسية</span>
             <strong>{{ catalog_summary.total_departments }}</strong>
@@ -65,7 +72,7 @@
     </section>
 
     <div class="admin-grid admin-grid-secondary">
-        <section class="detail-block">
+        <section class="detail-block admin-section-anchor" id="catalog-add-department">
             <h3>إضافة قسم رئيسي</h3>
             <form action="{{ url_for('admin_create_department') }}" method="post" class="stack-form">
                 <input type="hidden" name="return_to" value="admin_catalog">
@@ -85,7 +92,7 @@
             </form>
         </section>
 
-        <section class="detail-block">
+        <section class="detail-block admin-section-anchor" id="catalog-add-subcategory">
             <h3>إضافة قسم فرعي</h3>
             <form action="{{ url_for('admin_create_subcategory') }}" method="post" class="stack-form">
                 <input type="hidden" name="return_to" value="admin_catalog">
@@ -115,9 +122,9 @@
         <div class="catalog-reorder-status" id="catalog-reorder-status" aria-live="polite"></div>
     </div>
 
-    <section class="catalog-admin-grid" id="catalog-admin-grid">
+    <section class="catalog-admin-grid admin-section-anchor" id="catalog-structure">
         {% for department in admin_departments %}
-        <details class="detail-block catalog-admin-item" data-catalog-search="{{ department.name }} {{ department.slug }} {{ department.description }} {% for subcategory in department.subcategory_items %}{{ subcategory.name }} {{ subcategory.slug }} {% endfor %}" data-department-slug="{{ department.slug }}" draggable="true" open>
+        <details class="detail-block catalog-admin-item" data-catalog-search="{{ department.name }} {{ department.slug }} {{ department.description }} {% for subcategory in department.subcategory_items %}{{ subcategory.name }} {{ subcategory.slug }} {% endfor %}" data-department-slug="{{ department.slug }}" draggable="true" {% if loop.first %}open{% endif %}>
             <summary class="catalog-admin-summary">
                 <div>
                     <span class="drag-handle" aria-hidden="true">⋮⋮</span>

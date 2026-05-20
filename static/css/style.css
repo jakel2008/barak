@@ -520,11 +520,32 @@ a {
 .hero-panel {
     overflow: hidden;
 }
+.admin-section-anchor {
+    scroll-margin-top: 100px;
+}
+.admin-mobile-shortcuts {
+    display: none;
+}
+.admin-shortcut-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(27, 26, 24, 0.08);
+    color: var(--accent);
+    font-weight: 800;
+}
 
 .hero-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
+.catalog-admin-item {
+    overflow: hidden;
+}
     margin: 28px 0;
 }
 
@@ -535,6 +556,65 @@ a {
     min-height: 48px;
     padding: 0 22px;
     border-radius: 999px;
+    .admin-mobile-shortcuts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0 0 14px;
+    }
+    .admin-action-grid,
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .metric-card-wide {
+        grid-column: span 2;
+    }
+    .admin-toolbar {
+        gap: 12px;
+    }
+    .analytics-row,
+    .coupon-admin-card,
+    .review-admin-card,
+    .order-top,
+    .order-actions,
+    .admin-product-head,
+    .coupon-admin-actions {
+        align-items: flex-start;
+    }
+    .analytics-row,
+    .coupon-admin-card,
+    .review-admin-card,
+    .order-top,
+    .order-actions {
+        flex-direction: column;
+    }
+    .admin-product-preview {
+        width: 100%;
+        max-width: 96px;
+        border-radius: 18px;
+    }
+    .admin-products,
+    .admin-orders,
+    .admin-review-list,
+    .admin-coupon-list {
+        gap: 12px;
+    }
+    .catalog-admin-summary {
+        gap: 12px;
+    }
+    .catalog-admin-summary > div:first-child {
+        display: grid;
+        gap: 6px;
+    }
+    .catalog-admin-meta {
+        font-size: 0.82rem;
+        gap: 8px;
+    }
+    .catalog-admin-item .analytics-row {
+        padding: 12px;
+        border-radius: 14px;
+    }
     font-weight: 800;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     border: 0;
@@ -542,6 +622,40 @@ a {
     font-family: inherit;
 }
 
+    .admin-mobile-shortcuts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .admin-shortcut-link {
+        min-height: 42px;
+        font-size: 0.88rem;
+    }
+    .admin-action-grid,
+    .admin-stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .admin-toolbar .btn,
+    .admin-toolbar-search,
+    .order-actions .inline-form,
+    .order-actions .btn,
+    .coupon-admin-actions,
+    .coupon-admin-actions .btn {
+        width: 100%;
+    }
+    .admin-toolbar-search {
+        order: -1;
+    }
+    .catalog-admin-item {
+        padding: 16px;
+    }
+    .catalog-admin-summary {
+        gap: 10px;
+    }
+    .catalog-admin-meta {
+        justify-content: flex-start;
+    }
+    .drag-handle {
+        min-width: 22px;
+    }
 .btn:hover {
     transform: translateY(-2px);
 }
@@ -549,6 +663,18 @@ a {
 .btn-primary {
     background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
     color: #fff;
+    .admin-mobile-shortcuts,
+    .admin-action-grid,
+    .admin-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    .metric-card-wide {
+        grid-column: auto;
+    }
+    .catalog-admin-meta {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
     box-shadow: 0 12px 24px rgba(125, 47, 22, 0.22);
 }
 

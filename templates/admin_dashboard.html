@@ -10,6 +10,16 @@
         <p>يمكنك من هنا إضافة منتج جديد، تعديل المنتجات الحالية، ومتابعة الطلبات الواردة من الزوار.</p>
     </div>
 
+    <div class="admin-mobile-shortcuts">
+        <a class="admin-shortcut-link" href="#admin-catalog-link">الكتالوج</a>
+        <a class="admin-shortcut-link" href="#admin-analytics">التفاعل</a>
+        <a class="admin-shortcut-link" href="#admin-coupons">الكوبونات</a>
+        <a class="admin-shortcut-link" href="#admin-create-product">إضافة منتج</a>
+        <a class="admin-shortcut-link" href="#admin-orders">الطلبات</a>
+        <a class="admin-shortcut-link" href="#admin-products">المنتجات</a>
+        <a class="admin-shortcut-link" href="#admin-reviews">التقييمات</a>
+    </div>
+
     <datalist id="subcategory-options">
         {% for department in departments %}
             {% for subcategory in department.subcategories %}
@@ -18,7 +28,7 @@
         {% endfor %}
     </datalist>
 
-    <section class="detail-block admin-action-panel">
+    <section class="detail-block admin-action-panel admin-section-anchor" id="admin-catalog-link">
         <div class="section-heading section-heading-inline">
             <span>الكتالوج</span>
             <h3>إدارة الأقسام من مساحة مستقلة</h3>
@@ -64,7 +74,7 @@
     </section>
 
     <div class="admin-grid admin-grid-secondary">
-        <section class="detail-block">
+        <section class="detail-block admin-section-anchor" id="admin-analytics">
             <h3>إحصاءات التفاعل</h3>
             {% if dashboard_metrics.analytics_rows %}
             <div class="analytics-list">
@@ -94,7 +104,7 @@
             {% endif %}
         </section>
 
-        <section class="detail-block">
+        <section class="detail-block admin-section-anchor" id="admin-coupons">
             <h3>إدارة الكوبونات</h3>
             <form action="{{ url_for('admin_create_coupon') }}" method="post" class="stack-form">
                 <div class="form-grid two-columns">
@@ -146,7 +156,7 @@
     </div>
 
     <div class="admin-grid">
-        <section class="detail-block">
+        <section class="detail-block admin-section-anchor" id="admin-create-product">
             <h3>إضافة منتج جديد</h3>
             <form action="{{ url_for('admin_create_product') }}" method="post" enctype="multipart/form-data" class="stack-form">
                 <div class="form-grid two-columns">
@@ -214,7 +224,7 @@
             </form>
         </section>
 
-        <section class="detail-block">
+        <section class="detail-block admin-section-anchor" id="admin-orders">
             <h3>الطلبات</h3>
             <div class="admin-orders">
                 {% if orders %}
@@ -271,7 +281,7 @@
         </section>
     </div>
 
-    <section class="detail-block">
+    <section class="detail-block admin-section-anchor" id="admin-products">
         <h3>إدارة المنتجات الحالية</h3>
         <div class="admin-products">
             {% for product in products %}
@@ -400,7 +410,7 @@
         </div>
     </section>
 
-    <section class="detail-block">
+    <section class="detail-block admin-section-anchor" id="admin-reviews">
         <h3>أحدث التقييمات</h3>
         <div class="admin-review-list">
             {% for review in dashboard_metrics.recent_reviews %}
