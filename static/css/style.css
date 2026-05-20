@@ -26,6 +26,11 @@ body {
         radial-gradient(circle at bottom left, rgba(32, 68, 60, 0.16), transparent 24%),
         var(--bg);
     color: var(--ink);
+    overflow-x: hidden;
+}
+
+img {
+    max-width: 100%;
 }
 
 a {
@@ -1530,12 +1535,34 @@ textarea.text-input {
         align-items: flex-start;
     }
 
-    .mega-menu {
-        position: static;
-        display: block;
+    .nav-shell,
+    .top-nav,
+    .brand,
+    .mega-nav-item,
+    .hero-actions,
+    .card-actions,
+    .product-highlights,
+    .product-meta,
+    .department-meta {
         width: 100%;
-        margin-top: 10px;
-        padding: 12px;
+    }
+
+    .top-nav {
+        gap: 10px;
+    }
+
+    .top-nav a {
+        width: 100%;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(27, 26, 24, 0.08);
+    }
+
+    .mega-nav-item > a {
+        display: block;
+    }
+
+    .mega-menu {
+        display: none;
     }
 
     .hero-section {
@@ -1543,7 +1570,14 @@ textarea.text-input {
     }
 
     .hero-copy h1 {
-        font-size: 2.5rem;
+        font-size: 2rem;
+        line-height: 1.25;
+    }
+
+    .hero-copy p,
+    .product-description,
+    .section-heading p {
+        font-size: 0.98rem;
     }
 
     .hero-panel,
@@ -1569,6 +1603,27 @@ textarea.text-input {
         flex-basis: 100%;
     }
 
+    .hero-actions,
+    .card-actions,
+    .filter-actions,
+    .coupon-input-group {
+        flex-direction: column;
+    }
+
+    .hero-actions .btn,
+    .card-actions .btn,
+    .card-actions .card-link,
+    .filter-actions button,
+    .coupon-input-group button,
+    .wishlist-btn {
+        width: 100%;
+    }
+
+    .card-actions .inline-form,
+    .card-actions .inline-form button {
+        width: 100%;
+    }
+
     .subcategory-explorer-grid {
         grid-template-columns: 1fr;
     }
@@ -1583,6 +1638,22 @@ textarea.text-input {
 
     .hero-panel-media {
         margin: -20px -20px 18px;
+    }
+
+    .catalog-selector-card {
+        min-width: 132px;
+    }
+
+    .search-panel,
+    .catalog-explorer,
+    .department-section,
+    .catalog-section-selector,
+    .filters-panel,
+    .reviews-section,
+    .coupon-input-section,
+    .detail-block,
+    .purchase-card {
+        border-radius: 18px;
     }
 
     .admin-product-head {
