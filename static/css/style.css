@@ -1304,6 +1304,10 @@ textarea.text-input {
     margin-top: 22px;
 }
 
+.cart-grid-service {
+    align-items: start;
+}
+
 .tracking-status-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1735,9 +1739,29 @@ textarea.text-input {
     .product-hero,
     .search-grid,
     .department-search-grid,
+    .cart-grid,
     .admin-grid,
     .footer-grid {
         grid-template-columns: 1fr;
+    }
+
+    .cart-page,
+    .tracking-page,
+    .admin-page {
+        padding: 18px 0 36px;
+    }
+
+    .cart-page .section-heading,
+    .tracking-page .section-heading,
+    .admin-page .section-heading {
+        margin-bottom: 14px;
+    }
+
+    .cart-page .section-heading h2,
+    .tracking-page .section-heading h2,
+    .admin-page .section-heading h2 {
+        margin-top: 6px;
+        margin-bottom: 8px;
     }
 
     .cinematic-hero .shell {
@@ -1843,6 +1867,35 @@ textarea.text-input {
     .filters-panel,
     .reviews-section {
         padding: 20px;
+    }
+
+    .cart-item,
+    .order-card,
+    .admin-product-card,
+    .auth-card,
+    .empty-state {
+        padding: 16px;
+        border-radius: 18px;
+    }
+
+    .checkout-total {
+        padding: 12px 14px;
+        margin: 4px 0 14px;
+        border-radius: 16px;
+        background: rgba(201, 109, 66, 0.1);
+    }
+
+    .contact-service-card {
+        margin: 12px 0;
+        padding: 14px;
+    }
+
+    .tracking-page .purchase-card {
+        padding: 16px;
+    }
+
+    .site-footer {
+        padding-bottom: calc(88px + var(--safe-bottom));
     }
 
     .hero-panel-media {
@@ -2024,6 +2077,16 @@ textarea.text-input {
         padding-top: 30px;
     }
 
+    .cart-page .section-heading,
+    .tracking-page .section-heading {
+        text-align: center;
+    }
+
+    .cart-page .section-heading span,
+    .tracking-page .section-heading span {
+        justify-content: center;
+    }
+
     .hero-copy h1 {
         font-size: 2rem;
         line-height: 1.25;
@@ -2125,6 +2188,30 @@ textarea.text-input {
     .admin-product-head {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .cart-controls {
+        width: 100%;
+        gap: 10px;
+    }
+
+    .cart-controls form,
+    .cart-controls .btn,
+    .cart-controls strong {
+        width: 100%;
+    }
+
+    .cart-controls strong,
+    .empty-state {
+        text-align: center;
+    }
+
+    .tracking-page .purchase-card {
+        display: none;
+    }
+
+    .checkout-total strong {
+        font-size: 1.1rem;
     }
 }
 

@@ -10,7 +10,7 @@
         <p>السلة مرتبطة بجلسة المتصفح الحالية، وعند إتمام الطلب يتم حفظه في قاعدة البيانات.</p>
     </div>
 
-    <div class="cart-grid">
+    <div class="cart-grid cart-grid-service">
         <section class="detail-block">
             {% if cart['items'] %}
                 {% for item in cart['items'] %}
@@ -42,6 +42,7 @@
             {% endif %}
         </section>
 
+        {% if cart['items'] %}
         <aside class="purchase-card">
             <h3>إتمام الطلب</h3>
             
@@ -114,6 +115,7 @@
                 <button class="btn btn-primary wide" type="submit" {% if not cart['items'] %}disabled{% endif %}>تأكيد الطلب</button>
             </form>
         </aside>
+        {% endif %}
     </div>
 </section>
 {% endblock %}
