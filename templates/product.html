@@ -70,6 +70,16 @@
         </aside>
     </div>
 
+    <div class="mobile-purchase-bar">
+        <div class="mobile-purchase-copy">
+            <strong>{{ product.price }} {{ store.currency }}</strong>
+            <span>{{ product.stock }}</span>
+        </div>
+        <form action="{{ url_for('add_to_cart', product_id=product.id) }}" method="post" class="inline-form wide">
+            <button class="btn btn-primary wide" type="submit">أضف إلى السلة</button>
+        </form>
+    </div>
+
     <section class="detail-block">
         {% if product.image_urls|length > 1 %}
         <div class="section-heading small">
